@@ -1,0 +1,8 @@
+Var a, b, c
+a = 14.0
+b = 6.1
+c = a
+while a < 28.0 do begin
+    a = a + b
+    print(a)
+end

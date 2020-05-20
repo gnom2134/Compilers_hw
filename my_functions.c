@@ -31,7 +31,7 @@ struct symbol* lookup(char* sym) {
             return sp;
         }
 
-        if (++sp >= symbol_table+N_HASH) {
+        if (++sp >= symbol_table + N_HASH) {
             sp = symbol_table;
         }
     }
@@ -40,7 +40,27 @@ struct symbol* lookup(char* sym) {
     abort();
 }
 
-struct ast_node* new_ast(int nodetype, struct ast *l, struct ast *r) {
+struct symbol* null_lookup(char* sym) {
+    struct symbol *sp = &symbol_table[symbol_hash(sym) % N_HASH];
+    int s_count = N_HASH;
+
+    while(--s_count >= 0) {
+        if (sp->name && !strcmp(sp->name, sym)) {
+            return sp;
+        }
+
+        if (!sp->name) {
+            return NULL;
+        }
+
+        if (++sp >= symbol_table + N_HASH) {
+            sp = symbol_table;
+        }
+    }
+
+}
+
+struct ast_node* new_ast(int nodetype, struct ast_node *l, struct ast_node *r) {
     struct ast_node *a = malloc(sizeof(struct ast_node));
 
     if(!a) {
@@ -115,6 +135,20 @@ struct symlist* new_symlist(struct symbol* sym, struct symlist* next)
     return sl;
 }
 
+struct ast_node* new_var(struct symlist *syms) {
+    struct symlist* head = syms;
+    while (syms) {
+        struct symbol* sym = lookup(syms->sym->name);
+        sym->name = syms->sym->name;
+        sym->value = 0.0;
+        syms = syms->next;
+    }
+    struct symvarlist* node = malloc(sizeof(struct symvarlist));
+    node->nodetype = 'V';
+    node->syms = head;
+    return (struct ast_node*) node;
+}
+
 double eval(struct ast_node* a) {
     double v;
 
@@ -128,6 +162,10 @@ double eval(struct ast_node* a) {
 
         case 'N': v = ((struct symref *)a)->s->value; break;
 
+        case 'V': break;
+        case 'P': eval(a->l); v = eval(a->r); break;
+        case 'O': eval(a->l); v = eval(a->r); break;
+
         case '=': v = ((struct symasgn *)a)->s->value =
                     eval(((struct symasgn *)a)->v); break;
 
@@ -137,6 +175,7 @@ double eval(struct ast_node* a) {
         case '/': v = eval(a->l) / eval(a->r); break;
         case 'M': v = -eval(a->l); break;
         case 'n': v = !(eval(a->l)); break;
+        case 'p': v = eval(a->l); printf("%f\n", v); break;
 
         case '>': v = (eval(a->l) > eval(a->r))? 1 : 0; break;
         case '<': v = (eval(a->l) < eval(a->r))? 1 : 0; break;
@@ -168,13 +207,32 @@ void print_ast(struct ast_node* a, int line_id) {
             break;
         }
 
+        case 'P': {
+            printf("program with var declaration on line with id %i and operators on line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+
+        case 'O': {
+            printf("operator line with commands in line with id %i and nex operator in line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+
         case 'N': {
             printf("reference to %s\n", ((struct symref *)a)->s->name);
             break;
         }
 
+        case 'V' : {
+            printf("Variables definition part\n");
+            break;
+        }
+
         case '=': {
-            printf("assigning value from line with id %i to %s\n", new_line_id1, ((struct symasgn *) a)->s->value);
+            printf("assigning value from line with id %i to %s\n", new_line_id1, ((struct symasgn *) a)->s->name);
             print_ast(((struct symasgn *)a)->v, new_line_id1);
             break;
         }
@@ -242,6 +300,12 @@ void print_ast(struct ast_node* a, int line_id) {
             break;
         }
 
+        case 'p': {
+            printf("printing expression from the line with id %i\n", new_line_id1);
+            print_ast(a->l, new_line_id1);
+            break;
+        }
+
         case 'L': {
             printf("symlist with contents in line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
@@ -265,23 +329,45 @@ void treefree(struct ast_node * a) {
         case '>':
         case 'E':
         case 'L':
+        case 'O':
+        case 'P':
             treefree(a->r);
         case 'M':
+        case 'p':
         case 'n':
             treefree(a->l);
+            free(a);
+            break;
         case 'K': case 'N':
+            free(a);
             break;
         case '=':
-            free( ((struct symasgn *)a)->v);
+            treefree( ((struct symasgn *)a)->v);
+            free(a);
             break;
         case 'W':
             free( ((struct flow *)a)->cond);
-            if( ((struct flow *)a)->tl) free( ((struct flow *)a)->tl);
+            if( ((struct flow *)a)->tl) treefree( ((struct flow *)a)->tl);
+            free(a);
+            break;
+        case 'V':
+            if (((struct symvarlist *)a)->syms) {
+                symlistfree(((struct symvarlist *)a)->syms);
+            }
+            free( (struct symvarlist *)a);
             break;
         default: printf("internal error: free bad node %c\n", a->nodetype);
     }
+}
 
-    free(a);
+void symlistfree(struct symlist *sl) {
+    struct symlist *nsl;
+
+    while(sl) {
+        nsl = sl->next;
+        free(sl);
+        sl = nsl;
+    }
 }
 
 void yyerror(char *s, ...)
@@ -292,4 +378,8 @@ void yyerror(char *s, ...)
     fprintf(stderr, "%d: error: ", yylineno);
     vfprintf(stderr, s, ap);
     fprintf(stderr, "\n");
+}
+
+int main() {
+    return yyparse();
 }
