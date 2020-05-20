@@ -40,26 +40,6 @@ struct symbol* lookup(char* sym) {
     abort();
 }
 
-struct symbol* null_lookup(char* sym) {
-    struct symbol *sp = &symbol_table[symbol_hash(sym) % N_HASH];
-    int s_count = N_HASH;
-
-    while(--s_count >= 0) {
-        if (sp->name && !strcmp(sp->name, sym)) {
-            return sp;
-        }
-
-        if (!sp->name) {
-            return NULL;
-        }
-
-        if (++sp >= symbol_table + N_HASH) {
-            sp = symbol_table;
-        }
-    }
-
-}
-
 struct ast_node* new_ast(int nodetype, struct ast_node *l, struct ast_node *r) {
     struct ast_node *a = malloc(sizeof(struct ast_node));
 
@@ -131,6 +111,7 @@ struct symlist* new_symlist(struct symbol* sym, struct symlist* next)
         exit(0);
     }
     sl->sym = sym;
+    sl->sym->check = 1;
     sl->next = next;
     return sl;
 }
@@ -160,14 +141,26 @@ double eval(struct ast_node* a) {
     switch(a->nodetype) {
         case 'K': v = ((struct numval *)a)->number; break;
 
-        case 'N': v = ((struct symref *)a)->s->value; break;
+        case 'N': {
+            if (((struct symref *) a)->s->check != 1) {
+                yyerror("Undefined variable");
+            }
+            v = ((struct symref *) a)->s->value;
+            break;
+        }
 
         case 'V': break;
         case 'P': eval(a->l); v = eval(a->r); break;
         case 'O': eval(a->l); v = eval(a->r); break;
 
-        case '=': v = ((struct symasgn *)a)->s->value =
-                    eval(((struct symasgn *)a)->v); break;
+        case '=': {
+            if (((struct symasgn *) a)->s->check != 1) {
+                yyerror("Undefined variable");
+            }
+            v = ((struct symasgn *) a)->s->value =
+                    eval(((struct symasgn *) a)->v);
+            break;
+        }
 
         case '+': v = eval(a->l) + eval(a->r); break;
         case '-': v = eval(a->l) - eval(a->r); break;
@@ -378,6 +371,7 @@ void yyerror(char *s, ...)
     fprintf(stderr, "%d: error: ", yylineno);
     vfprintf(stderr, s, ap);
     fprintf(stderr, "\n");
+    exit(1);
 }
 
 int main() {

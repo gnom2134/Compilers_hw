@@ -3,6 +3,7 @@
 struct symbol {
     char* name;
     double value;
+    int check;
 };
 
 struct symbol symbol_table[N_HASH];
