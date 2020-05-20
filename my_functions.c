@@ -7,7 +7,7 @@
 
 static unsigned symbol_hash(char *sym) {
     unsigned int hash = 0;
-    unsigned c;
+    unsigned character;
 
     while(character = *sym++) {
         hash = hash * 9 ^ character;
@@ -17,7 +17,7 @@ static unsigned symbol_hash(char *sym) {
 }
 
 struct symbol* lookup(char* sym) {
-    struct symbol *sp = &symbol_table[symbol_hash(sym) % NHASH];
+    struct symbol *sp = &symbol_table[symbol_hash(sym) % N_HASH];
     int s_count = N_HASH;
 
     while(--s_count >= 0) {
@@ -28,12 +28,10 @@ struct symbol* lookup(char* sym) {
         if (!sp->name) {
             sp->name = strdup(sym);
             sp->value = 0;
-            sp->func = NULL;
-            sp->syms = NULL;
             return sp;
         }
 
-        if (++sp >= symbol_table+NHASH) {
+        if (++sp >= symbol_table+N_HASH) {
             sp = symbol_table;
         }
     }
@@ -42,7 +40,7 @@ struct symbol* lookup(char* sym) {
     abort();
 }
 
-struct ast_node* new_ast(int node_type, struct ast *l, struct ast *r) {
+struct ast_node* new_ast(int nodetype, struct ast *l, struct ast *r) {
     struct ast_node *a = malloc(sizeof(struct ast_node));
 
     if(!a) {
@@ -92,7 +90,7 @@ struct ast_node* new_reference(struct symbol *s) {
     return (struct ast_node *)a;
 }
 
-struct ast_node* new_flow(int node_type, struct ast_node* cond, struct ast_node* operators) {
+struct ast_node* new_flow(int nodetype, struct ast_node* cond, struct ast_node* operators) {
     struct flow *a = malloc(sizeof(struct flow));
     if(!a) {
         yyerror("out of space");
@@ -104,3 +102,194 @@ struct ast_node* new_flow(int node_type, struct ast_node* cond, struct ast_node*
     return (struct ast_node *)a;
 }
 
+struct symlist* new_symlist(struct symbol* sym, struct symlist* next)
+{
+    struct symlist *sl = malloc(sizeof(struct symlist));
+
+    if(!sl) {
+        yyerror("out of space");
+        exit(0);
+    }
+    sl->sym = sym;
+    sl->next = next;
+    return sl;
+}
+
+double eval(struct ast_node* a) {
+    double v;
+
+    if(!a) {
+        yyerror("internal error, null eval");
+        return 0.0;
+    }
+
+    switch(a->nodetype) {
+        case 'K': v = ((struct numval *)a)->number; break;
+
+        case 'N': v = ((struct symref *)a)->s->value; break;
+
+        case '=': v = ((struct symasgn *)a)->s->value =
+                    eval(((struct symasgn *)a)->v); break;
+
+        case '+': v = eval(a->l) + eval(a->r); break;
+        case '-': v = eval(a->l) - eval(a->r); break;
+        case '*': v = eval(a->l) * eval(a->r); break;
+        case '/': v = eval(a->l) / eval(a->r); break;
+        case 'M': v = -eval(a->l); break;
+        case 'n': v = !(eval(a->l)); break;
+
+        case '>': v = (eval(a->l) > eval(a->r))? 1 : 0; break;
+        case '<': v = (eval(a->l) < eval(a->r))? 1 : 0; break;
+        case 'E': v = (eval(a->l) == eval(a->r))? 1 : 0; break;
+
+        case 'W':
+            v = 0.0;
+
+            if( ((struct flow *)a)->tl) {
+                while( eval(((struct flow *)a)->cond) != 0)
+                    v = eval(((struct flow *)a)->tl);
+            }
+            break;
+
+        case 'L': eval(a->l); v = eval(a->r); break;
+
+        default: printf("internal error: bad node %c\n", a->nodetype);
+    }
+    return v;
+}
+
+void print_ast(struct ast_node* a, int line_id) {
+    printf("line id:%i - ", line_id);
+    int new_line_id1 = line_id * 2;
+    int new_line_id2 = line_id * 2 + 1;
+    switch(a->nodetype) {
+        case 'K': {
+            printf("number %f\n", ((struct numval *) a)->number);
+            break;
+        }
+
+        case 'N': {
+            printf("reference to %s\n", ((struct symref *)a)->s->name);
+            break;
+        }
+
+        case '=': {
+            printf("assigning value from line with id %i to %s\n", new_line_id1, ((struct symasgn *) a)->s->value);
+            print_ast(((struct symasgn *)a)->v, new_line_id1);
+            break;
+        }
+
+        case '+': {
+            printf("adding two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case '-': {
+            printf("subtracting two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case '*': {
+            printf("multiplying two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case '/': {
+            printf("dividing two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case 'M': {
+            printf("unary minus to from line with id %i\n", new_line_id1);
+            print_ast(a->l, new_line_id1);
+            break;
+        }
+        case 'n': {
+            printf("unary not to from line with id %i\n", new_line_id1);
+            print_ast(a->l, new_line_id1);
+            break;
+        }
+
+        case '>': {
+            printf("checking if number from line with id %i is greater than number from line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case '<': {
+            printf("checking if number from line with id %i is less than number from line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+        case 'E': {
+            printf("checking if number from line with id %i is equal to number from line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+
+        case 'W': {
+            printf("loop with condition in line with id %i and body in line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(((struct flow *) a)->cond, new_line_id1);
+            if (((struct flow *) a)->cond) {
+                print_ast(((struct flow *) a)->tl, new_line_id2);
+            }
+            break;
+        }
+
+        case 'L': {
+            printf("symlist with contents in line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            print_ast(a->l, new_line_id1);
+            print_ast(a->r, new_line_id2);
+            break;
+        }
+
+        default: {
+            printf("internal error: bad node %c\n", a->nodetype);
+        }
+    }
+}
+
+void treefree(struct ast_node * a) {
+    switch(a->nodetype) {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '<':
+        case '>':
+        case 'E':
+        case 'L':
+            treefree(a->r);
+        case 'M':
+        case 'n':
+            treefree(a->l);
+        case 'K': case 'N':
+            break;
+        case '=':
+            free( ((struct symasgn *)a)->v);
+            break;
+        case 'W':
+            free( ((struct flow *)a)->cond);
+            if( ((struct flow *)a)->tl) free( ((struct flow *)a)->tl);
+            break;
+        default: printf("internal error: free bad node %c\n", a->nodetype);
+    }
+
+    free(a);
+}
+
+void yyerror(char *s, ...)
+{
+    va_list ap;
+    va_start(ap, s);
+
+    fprintf(stderr, "%d: error: ", yylineno);
+    vfprintf(stderr, s, ap);
+    fprintf(stderr, "\n");
+}
