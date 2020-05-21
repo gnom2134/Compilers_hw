@@ -5,8 +5,6 @@
 #include "my_parser.tab.h"
 %}
 
-EXP	([Ee][-+]?[0-9]+)
-
 %%
 "=="                    { return EQL; }
 "+" |
@@ -30,12 +28,11 @@ EXP	([Ee][-+]?[0-9]+)
                             yylval.s = lookup(yytext);
                             return NAME;
                         }
-[0-9]+"."[0-9]*{EXP}? |
-"."?[0-9]+{EXP}?        {
+[0-9]+                  {
                             yylval.d = atof(yytext);
                             return CNT;
                         }
 "{".*"}"                /* pass */
 [ \t]                   /* pass */
-"\n"                    { return SEP; }
+"\n"                    /* pass */
 %%

@@ -2,7 +2,7 @@
 
 struct symbol {
     char* name;
-    double value;
+    int value;
     int check;
 };
 
@@ -33,7 +33,7 @@ struct flow {
 
 struct numval {
     int nodetype;
-    double number;
+    int number;
 };
 
 struct symref {
@@ -54,7 +54,7 @@ struct symvarlist {
 
 struct ast_node* new_ast(int node_type, struct ast_node *l, struct ast_node *r);
 
-struct ast_node* new_number(double d);
+struct ast_node* new_number(int d);
 
 struct ast_node* new_assign(struct symbol *s, struct ast_node *v);
 
@@ -68,7 +68,7 @@ struct symlist* new_symlist(struct symbol* sym, struct symlist* next);
 
 void dodef(struct symbol *name, struct symlist *syms, struct ast_node *stmts);
 
-double eval(struct ast_node *);
+int eval(struct ast_node *);
 
 void treefree(struct ast_node *);
 

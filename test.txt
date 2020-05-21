@@ -1,10 +1,10 @@
-Var a, c, d
-a = - 14.0
+Var a, d
+{test comment}
+a = - 14
 print(a)
-d = 10.7
-c = a
-print(c)
-while a < 28.0 do begin
-    a = a + d
+d = - 10 * 2 + 2
+print(d)
+while not (a > 28) do begin
+    a = a - d
     print(a)
 end

@@ -53,7 +53,7 @@ struct ast_node* new_ast(int nodetype, struct ast_node *l, struct ast_node *r) {
     return a;
 }
 
-struct ast_node* new_number(double d) {
+struct ast_node* new_number(int d) {
     struct numval *a = malloc(sizeof(struct numval));
 
     if(!a) {
@@ -130,8 +130,8 @@ struct ast_node* new_var(struct symlist *syms) {
     return (struct ast_node*) node;
 }
 
-double eval(struct ast_node* a) {
-    double v;
+int eval(struct ast_node* a) {
+    int v;
 
     if(!a) {
         yyerror("internal error, null eval");
@@ -150,8 +150,8 @@ double eval(struct ast_node* a) {
         }
 
         case 'V': break;
-        case 'P': eval(a->l); v = eval(a->r); break;
-        case 'O': eval(a->l); v = eval(a->r); break;
+        case 'P': eval(a->l); eval(a->r); v = 0;break;
+        case 'O': eval(a->l); eval(a->r); v = 0; break;
 
         case '=': {
             if (((struct symasgn *) a)->s->check != 1) {
@@ -168,22 +168,23 @@ double eval(struct ast_node* a) {
         case '/': v = eval(a->l) / eval(a->r); break;
         case 'M': v = -eval(a->l); break;
         case 'n': v = !(eval(a->l)); break;
-        case 'p': v = eval(a->l); printf("%f\n", v); break;
+        case 'p': v = eval(a->l); printf("%i\n", v); break;
 
         case '>': v = (eval(a->l) > eval(a->r))? 1 : 0; break;
         case '<': v = (eval(a->l) < eval(a->r))? 1 : 0; break;
         case 'E': v = (eval(a->l) == eval(a->r))? 1 : 0; break;
 
         case 'W':
-            v = 0.0;
+            v = 0;
 
             if( ((struct flow *)a)->tl) {
                 while( eval(((struct flow *)a)->cond) != 0)
                     v = eval(((struct flow *)a)->tl);
             }
+            v = 0;
             break;
 
-        case 'L': eval(a->l); v = eval(a->r); break;
+        case 'L': eval(a->l); eval(a->r); v = 0; break;
 
         default: printf("internal error: bad node %c\n", a->nodetype);
     }
@@ -191,101 +192,101 @@ double eval(struct ast_node* a) {
 }
 
 void print_ast(struct ast_node* a, int line_id) {
-    printf("line id:%i - ", line_id);
+    fprintf(stderr, "line id:%i - ", line_id);
     int new_line_id1 = line_id * 2;
     int new_line_id2 = line_id * 2 + 1;
     switch(a->nodetype) {
         case 'K': {
-            printf("number %f\n", ((struct numval *) a)->number);
+            fprintf(stderr, "number %i\n", ((struct numval *) a)->number);
             break;
         }
 
         case 'P': {
-            printf("program with var declaration on line with id %i and operators on line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "program with var declaration on line with id %i and operators on line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
 
         case 'O': {
-            printf("operator line with commands in line with id %i and nex operator in line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "operator line with commands in line with id %i and next operator in line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
 
         case 'N': {
-            printf("reference to %s\n", ((struct symref *)a)->s->name);
+            fprintf(stderr, "reference to %s\n", ((struct symref *)a)->s->name);
             break;
         }
 
         case 'V' : {
-            printf("Variables definition part\n");
+            fprintf(stderr, "Variables definition part\n");
             break;
         }
 
         case '=': {
-            printf("assigning value from line with id %i to %s\n", new_line_id1, ((struct symasgn *) a)->s->name);
+            fprintf(stderr, "assigning value from line with id %i to %s\n", new_line_id1, ((struct symasgn *) a)->s->name);
             print_ast(((struct symasgn *)a)->v, new_line_id1);
             break;
         }
 
         case '+': {
-            printf("adding two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "adding two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case '-': {
-            printf("subtracting two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "subtracting two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case '*': {
-            printf("multiplying two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "multiplying two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case '/': {
-            printf("dividing two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "dividing two numbers from line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case 'M': {
-            printf("unary minus to from line with id %i\n", new_line_id1);
+            fprintf(stderr, "unary minus to from line with id %i\n", new_line_id1);
             print_ast(a->l, new_line_id1);
             break;
         }
         case 'n': {
-            printf("unary not to from line with id %i\n", new_line_id1);
+            fprintf(stderr, "unary not to from line with id %i\n", new_line_id1);
             print_ast(a->l, new_line_id1);
             break;
         }
 
         case '>': {
-            printf("checking if number from line with id %i is greater than number from line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "checking if number from line with id %i is greater than number from line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case '<': {
-            printf("checking if number from line with id %i is less than number from line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "checking if number from line with id %i is less than number from line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
         case 'E': {
-            printf("checking if number from line with id %i is equal to number from line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "checking if number from line with id %i is equal to number from line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
 
         case 'W': {
-            printf("loop with condition in line with id %i and body in line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "loop with condition in line with id %i and body in line with id %i\n", new_line_id1, new_line_id2);
             print_ast(((struct flow *) a)->cond, new_line_id1);
             if (((struct flow *) a)->cond) {
                 print_ast(((struct flow *) a)->tl, new_line_id2);
@@ -294,20 +295,20 @@ void print_ast(struct ast_node* a, int line_id) {
         }
 
         case 'p': {
-            printf("printing expression from the line with id %i\n", new_line_id1);
+            fprintf(stderr, "printing expression from the line with id %i\n", new_line_id1);
             print_ast(a->l, new_line_id1);
             break;
         }
 
         case 'L': {
-            printf("symlist with contents in line with id %i and line with id %i\n", new_line_id1, new_line_id2);
+            fprintf(stderr, "symlist with contents in line with id %i and line with id %i\n", new_line_id1, new_line_id2);
             print_ast(a->l, new_line_id1);
             print_ast(a->r, new_line_id2);
             break;
         }
 
         default: {
-            printf("internal error: bad node %c\n", a->nodetype);
+            fprintf(stderr, "internal error: bad node %c\n", a->nodetype);
         }
     }
 }
